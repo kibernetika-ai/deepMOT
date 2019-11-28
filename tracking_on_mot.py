@@ -143,7 +143,7 @@ def main(args, sot_tracker, sst):
                             prev_xywh = np.array([prev_xywh], dtype=np.float32)
                             prev_xywh[:, [0, 2]] /= float(w)
                             prev_xywh[:, [1, 3]] /= float(h)
-                            track_norm_center = TrackUtil.convert_detection(prev_xywh)
+                            track_norm_center = TrackUtil.convert_detection(prev_xywh, is_cuda=is_cuda)
 
                             tracks_features = sst.forward_feature_extracter(im_prev_features,
                                                                             track_norm_center).detach_()
@@ -206,9 +206,11 @@ def main(args, sot_tracker, sst):
                             # inactive mode, do nothing
                             pass
 
-                        target_pos, target_sz, state_curr, _ = SiamRPN_track(state_curr, img_curr.copy(), sot_tracker,
-                                                                            train=True, CMC=(img_prev is not None and CMC),
-                                                                             prev_xyxy=prev_xyxy, w_matrix=w_matrix)
+                        target_pos, target_sz, state_curr, _ = SiamRPN_track(
+                            state_curr, img_curr.copy(), sot_tracker,
+                            train=True, CMC=(img_prev is not None and CMC),
+                            prev_xyxy=prev_xyxy, w_matrix=w_matrix, is_cuda=is_cuda
+                        )
                         tmp.append(torch.stack([target_pos[0] - target_sz[0]*0.5,
                                                 target_pos[1] - target_sz[1]*0.5,
                                                 target_pos[0] + target_sz[0]*0.5,
@@ -361,18 +363,29 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # init sot tracker #
+    is_cuda = torch.cuda.is_available()
     print("loading trained tracker from: ")
     print(args.models_root + 'trainedSOTtoMOT.pth')
     sot_tracker = SiamRPNvot()
-    sot_tracker.load_state_dict(torch.load(args.models_root + 'trainedSOTtoMOT.pth'))
+    sot_tracker.load_state_dict(
+        torch.load(
+            os.path.join(args.models_root, 'trainedSOTtoMOT.pth'),
+            map_location=torch.device('cpu') if not is_cuda else None,
+        )
+    )
 
     # init appearance model #
     print("loading appearance model from: ")
     print(args.models_root + 'DAN.pth')
     sst = build_sst('test', 900)
-    sst.load_state_dict(torch.load(args.models_root + 'DAN.pth'))
+    sst.load_state_dict(
+        torch.load(
+            os.path.join(args.models_root, 'DAN.pth'),
+            map_location=torch.device('cpu') if not is_cuda else None,
+        )
+    )
 
-    if args.is_cuda:
+    if is_cuda:
         sot_tracker.cuda()
         sst.cuda()
 

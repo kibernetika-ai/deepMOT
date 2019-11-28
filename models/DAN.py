@@ -64,7 +64,7 @@ config['final_net']['900'][0] = np.sum(config['selector_channel'])*2
 
 class SST(nn.Module):
     #new: combine two vgg_net
-    def __init__(self, phase, base, extras, selector, final_net, use_gpu=config['cuda']):
+    def __init__(self, phase, base, extras, selector, final_net, use_gpu=torch.cuda.is_available()):
         super(SST, self).__init__()
         self.phase = phase
 
@@ -150,7 +150,6 @@ class SST(nn.Module):
         feature2 = self.forward_feature_extracter(image2, detection2)
         return self.forward_stacker_features(feature1, feature2, False)
 
-
     def resize_dim(self, x, added_size, dim=1, constant=0):
         if added_size <= 0:
             return x
@@ -227,7 +226,7 @@ class SST(nn.Module):
             return y
         return x
 
-    def forward_stacker_features(self, xp, xn, fill_up_column=True, toNumpy=True):
+    def forward_stacker_features(self, xp, xn, fill_up_column=True, toNumpy=True, is_cuda=False):
 
         pre_rest_num = self.max_object - xp.shape[1]
         next_rest_num = self.max_object - xn.shape[1]
@@ -263,7 +262,10 @@ class SST(nn.Module):
         x_t = x_t[row_slice, :]
         x_t = x_t[:, col_slice]
 
-        x = Variable(torch.zeros(pre_num, next_num+1).cuda())
+        if self.use_gpu:
+            x = Variable(torch.zeros(pre_num, next_num+1).cuda())
+        else:
+            x = Variable(torch.zeros(pre_num, next_num+1))
         # x[0:pre_num, 0:next_num] = torch.max(x_f[0:pre_num, 0:next_num], x_t[0:pre_num, 0:next_num])
         x[0:pre_num, 0:next_num] = (x_f[0:pre_num, 0:next_num] + x_t[0:pre_num, 0:next_num]) / 2.0
         x[:, next_num:next_num+1] = x_f[:pre_num, next_num:next_num+1]
@@ -528,7 +530,7 @@ def selector(vgg, extra_layers, batch_normal=True):
     return vgg, extra_layers, selector_layers
 
 
-def build_sst(phase, size=900, use_gpu=config['cuda']):
+def build_sst(phase, size=900, use_gpu=torch.cuda.is_available()):
     '''
     create the SSJ Tracker Object
     :return: ssj tracker object
@@ -545,11 +547,12 @@ def build_sst(phase, size=900, use_gpu=config['cuda']):
     extras = config['extra_net']
     final = config['final_net']
 
-    return SST(phase,
-               *selector(
-                   vgg(base[str(size)], 3),
-                   add_extras(extras[str(size)], 1024)
-               ),
-               add_final(final[str(size)]),
-               use_gpu
-               )
+    return SST(
+        phase,
+        *selector(
+            vgg(base[str(size)], 3),
+            add_extras(extras[str(size)], 1024)
+        ),
+        add_final(final[str(size)]),
+        use_gpu
+    )

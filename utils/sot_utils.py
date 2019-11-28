@@ -155,7 +155,8 @@ def get_subwindow_tracking(im, pos, model_sz, original_sz, avg_chans, out_mode='
 # init a track and save it's appearance and current position in a dict #
 
 
-def SiamRPN_init(im, target_pos, target_sz, net, gt_id, train_bool=False, outputmode='torch', add_noise=False):
+def SiamRPN_init(im, target_pos, target_sz, net, gt_id, train_bool=False, outputmode='torch',
+                 add_noise=False, is_cuda=False):
     """
     init a track and save its reference image
     :param im: current frame, numpy array, [h, w, c]
@@ -190,9 +191,11 @@ def SiamRPN_init(im, target_pos, target_sz, net, gt_id, train_bool=False, output
     hc_z = target_sz[1] + p.context_amount * sum(target_sz)
     s_z = round(np.sqrt(wc_z * hc_z))
     # initialize the exemplar
-    if outputmode=='torch':
+    if outputmode == 'torch':
         z_crop = get_subwindow_tracking(im, target_pos, p.exemplar_size, s_z, avg_chans, noisy_bool=add_noise)
-        z = z_crop.unsqueeze(0).cuda()
+        z = z_crop.unsqueeze(0)
+        if is_cuda:
+            z = z.cuda()
     else:
         z = get_subwindow_tracking(im, target_pos, p.exemplar_size, s_z, avg_chans, out_mode=outputmode, noisy_bool=add_noise)
 
@@ -221,7 +224,8 @@ def SiamRPN_init(im, target_pos, target_sz, net, gt_id, train_bool=False, output
 # predict current position of the track by previous information in the state #
 
 
-def SiamRPN_track(state, im, net, train=False, noisy_bool=False, CMC=False, prev_xyxy=None, w_matrix=None):
+def SiamRPN_track(state, im, net, train=False, noisy_bool=False, CMC=False,
+                  prev_xyxy=None, w_matrix=None, is_cuda=False):
     """
     track target object
     :param state: information of the track at t-1; dict
@@ -273,12 +277,14 @@ def SiamRPN_track(state, im, net, train=False, noisy_bool=False, CMC=False, prev
 
     # print(x_crop.shape)
     if train:
-
-        target_position, target_size, score_single, score_tensor, ancrs = tracker_train(net, x_crop.cuda(), target_pos,
-                                                                                 target_sz * scale_z, window, scale_z,
-                                                                                 p, state['temple'], im)
+        target_position, target_size, score_single, score_tensor, ancrs = tracker_train(
+            net, x_crop.cuda() if is_cuda else x_crop, target_pos,
+            target_sz * scale_z, window, scale_z,
+            p, state['temple'], im, is_cuda,
+        )
         del x_crop
-        torch.cuda.empty_cache()
+        if is_cuda:
+            torch.cuda.empty_cache()
 
         # variables inside state, they are numpy not differentiable
         target_pos_numpy = target_position.detach().cpu().numpy().copy()
@@ -294,7 +300,9 @@ def SiamRPN_track(state, im, net, train=False, noisy_bool=False, CMC=False, prev
         return target_position, target_size, state, [score_tensor, ancrs]
 
     else:
-        target_pos, target_sz, score = tracker_eval(net, x_crop.cuda(), target_pos, target_sz * scale_z, window, scale_z, p, state['temple'])
+        target_pos, target_sz, score = tracker_eval(
+            net, x_crop.cuda() if is_cuda else x_crop, target_pos, target_sz * scale_z, window, scale_z, p, state['temple']
+        )
         target_pos[0] = max(0, min(state['im_w'], target_pos[0]))
         target_pos[1] = max(0, min(state['im_h'], target_pos[1]))
         target_sz[0] = max(10, min(state['im_w'], target_sz[0]))
@@ -306,24 +314,33 @@ def SiamRPN_track(state, im, net, train=False, noisy_bool=False, CMC=False, prev
         return state
 
 
-def tracker_train(net, x_crop, target_pos, target_sz, window, scale_z, p, t_plate, im):
+def tracker_train(net, x_crop, target_pos, target_sz, window, scale_z, p, t_plate, im, is_cuda=False):
     if isinstance(t_plate, list):
         delta, score = net(x_crop, t_plate[0], t_plate[1])
     elif isinstance(t_plate, np.ndarray):
-        tmp = net.temple(im_to_torch(t_plate).unsqueeze(0).cuda())
+        if is_cuda:
+            tmp = net.temple(im_to_torch(t_plate).unsqueeze(0).cuda())
+        else:
+            tmp = net.temple(im_to_torch(t_plate).unsqueeze(0))
         delta, score = net(x_crop, tmp[0], tmp[1])
 
     else:
         # print('i am here')
-        tmp = net.temple(t_plate.cuda())
+        tmp = net.temple(t_plate.cuda() if is_cuda else t_plate)
         delta, score = net(x_crop, tmp[0], tmp[1])
     # window = torch.FloatTensor(window.tolist()).cuda()
-    anchor = torch.tensor(p.anchor, dtype=torch.float32).cuda()
+    if is_cuda:
+        anchor = torch.tensor(p.anchor, dtype=torch.float32).cuda()
+    else:
+        anchor = torch.tensor(p.anchor, dtype=torch.float32)
 
     delta = delta.permute(1, 2, 3, 0).contiguous().view(4, -1)
     score = F.softmax(score.permute(1, 2, 3, 0).contiguous().view(2, -1), dim=0)
     score_numpy = score.detach()[1, :].cpu().numpy().copy()
-    proposals = torch.zeros_like(delta, requires_grad=False).cuda()
+    if is_cuda:
+        proposals = torch.zeros_like(delta, requires_grad=False).cuda()
+    else:
+        proposals = torch.zeros_like(delta, requires_grad=False)
     proposals[0, :] += delta[0, :] * anchor[:, 2] + anchor[:, 0]
     proposals[1, :] += delta[1, :] * anchor[:, 3] + anchor[:, 1]
     proposals[2, :] += torch.exp(delta[2, :]) * anchor[:, 2]

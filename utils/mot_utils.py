@@ -167,7 +167,10 @@ def easy_birth_deathV4_rpn(munkres, bbox_track, det_boxes, curr_img, id_track, c
         state = SiamRPN_init(curr_img_tosave, target_pos, target_sz, SOT_tracker, det_boxes[idx][0], True)
         states[count_ids] = state
 
-        bbox_track = torch.cat([bbox_track, torch.FloatTensor(bbox).cuda().unsqueeze(0)], dim=0)
+        bbox_t = torch.FloatTensor(bbox)
+        if is_cuda:
+            bbox_t = bbox_t.cuda()
+        bbox_track = torch.cat([bbox_track, bbox_t.unsqueeze(0)], dim=0)
         id_track.append(count_ids)
         if pre_id is not None:
             pre_id[int(det_boxes[idx][0])] = count_ids
@@ -181,7 +184,8 @@ def easy_birth_deathV4_rpn(munkres, bbox_track, det_boxes, curr_img, id_track, c
         id = id_track[idx]
         del states[id]
         id_track.pop(idx)
-    torch.cuda.empty_cache()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
     res = list(set(to_die) ^ set(list(range(bbox_track.size(0)))))
     bbox_track = torch.index_select(bbox_track, 0, torch.LongTensor(res).cuda())
 
@@ -191,13 +195,13 @@ def easy_birth_deathV4_rpn(munkres, bbox_track, det_boxes, curr_img, id_track, c
 
 
 def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
-                       count_ids, frameid, birth_candidates, toinit_tracks, death_candidates,
-                       states, sot_tracker, collect_prev_pos, sst, th,
-                        birth_iou=0.4, death_count=30, iou_th_overlap = 0.4, to_refine=False, DAN_th=0.5,birth_wait=3,
-                        to_interpolate=None, interpolate_flag=-1.0, loose_assignment=False, case1_interpolate = True):
+                         count_ids, frameid, birth_candidates, toinit_tracks, death_candidates,
+                         states, sot_tracker, collect_prev_pos, sst, th,
+                         birth_iou=0.4, death_count=30, iou_th_overlap = 0.4, to_refine=False, DAN_th=0.5,birth_wait=3,
+                         to_interpolate=None, interpolate_flag=-1.0, loose_assignment=False,
+                         case1_interpolate=True, is_cuda=False, last_frame=None):
     """
     :param distance: IOU between [track, det]  [num_track, num_dets]
-    :param velocity_track: {person_id: velocity...}, velocity_track at time t, keep track of current target velocity
     :param bbox_track: torch tensor of shape [num_track, 4], keep track of current target bboxes
     :param det_boxes: current detection [gt] boxes [[(id,) bbox], [(id,) bbox]]
     :param curr_img: numpy array current img to get target crop to give birth
@@ -211,12 +215,21 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
     """
     # print("birth and death frameid", frameid)
 
+    string_key = False
+    if string_key:
+        modifier = str
+    else:
+        modifier = int
+
     # for CURRENT birth process
-    det = det_boxes[str(frameid + 1)]
-    max_frameid = np.max(np.array(list(det_boxes.keys()), dtype=np.float32))
+    det = det_boxes[modifier(frameid + 1)]
+    if last_frame:
+        max_frameid = last_frame
+    else:
+        max_frameid = np.max(np.array(list(det_boxes.keys()), dtype=np.float32))
     im_h, im_w, _ = curr_img.shape
 
-    im_curr_features = TrackUtil.convert_image(curr_img.copy())
+    im_curr_features = TrackUtil.convert_image(curr_img.copy(), is_cuda)
 
     # track ids to die
     to_die = []
@@ -270,7 +283,6 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
 
                         else:
                             track_dets[max_iou_idx].append([detection_id, distance[max_iou_idx, detection_id]])
-
 
             else:
                 # det with all ious <0.5
@@ -432,22 +444,20 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                             avg_box = None
                             for f_id, det_index in collected_dets:
                                 if avg_box is None:
-                                    avg_box = np.array(det_boxes[str(f_id+1)][det_index][-4:]).astype(np.float32)
+                                    avg_box = np.array(det_boxes[modifier(f_id+1)][det_index][-4:]).astype(np.float32)
                                 else:
-                                    avg_box += np.array(det_boxes[str(f_id+1)][det_index][-4:]).astype(np.float32)
+                                    avg_box += np.array(det_boxes[modifier(f_id+1)][det_index][-4:]).astype(np.float32)
 
                                 # remove this detection from birth candidates
                                 if f_id in birth_candidates.keys() and det_index in birth_candidates[f_id]:
                                     del birth_candidates[f_id][birth_candidates[f_id].index(det_index)]
                                 if f_id == frameid and det_index not in not_a_birth_candidate:
-                                    #not a birth candidate
+                                    # not a birth candidate
                                     not_a_birth_candidate.append(det_index)
 
-
-
                             # reinit this track with mean corresponding bboxes of three frames
-                            avg_box /=3.0
-                            #todo check avg_box shape
+                            avg_box /= 3.0
+                            # todo check avg_box shape
                             # print(avg_box.shape)
                             cx, cy, w, h = 0.5 * (avg_box[0] + avg_box[2]), 0.5 * (avg_box[1] + avg_box[3]), \
                                            (avg_box[2] - avg_box[0]), (avg_box[3] - avg_box[1])
@@ -459,7 +469,6 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                             # correct the collected track trajectory during inactive mode
                             collect_prev_pos[id_track[i]][4][-1] = [frameid, avg_box]
                             collect_prev_pos[id_track[i]][7] = avg_box.copy()
-
 
                             # update bbox_track
                             bbox_track[i][0] = float(avg_box[0])
@@ -475,7 +484,6 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                         # clean up matched_counter and det boxes
                         collect_prev_pos[id_track[i]][2] = 0
                         collect_prev_pos[id_track[i]][3] = list()
-
 
                 else:
                     # iou <0.3
@@ -501,7 +509,7 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                     penalty += 0.995 ** ((frameid - old_frame) / 3.0)
                     affinity_mat_after_softmax += ((0.995 ** ((frameid - old_frame) / 3.0)) *
                                                    sst.forward_stacker_features(i_features, det_features, False,
-                                                                                toNumpy=True)[:,:-1])
+                                                                                toNumpy=True, is_cuda=is_cuda)[:,:-1])
                 affinity_mat_after_softmax/= penalty
             else:
                 affinity_mat_after_softmax = 1.0
@@ -519,7 +527,7 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                 if id_track[i] in to_interpolate.keys():
                     del to_interpolate[id_track[i]]
 
-                #TODO CHECKPOINT
+                # TODO CHECKPOINT
                 # recover tracks later
                 to_recover_track_idxes.append(i)
 
@@ -666,7 +674,6 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                 del death_candidates[id_track[i]]
                 del collect_prev_pos[id_track[i]]
 
-
     # det ids to birth
     to_birth = []
     if distance.shape[0] != 0:  # distance matrix is empty
@@ -703,14 +710,17 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
 
         for idx in to_birth:
             associated_bbox_detid[idx] = []
-            bbox = [] + det[idx][-4:]  # current det bbox for det_id = idx
+            if isinstance(det, list):
+                bbox = [] + det[idx][-4:]  # current det bbox for det_id = idx
+            else:
+                bbox = det[idx][-4:].copy()
 
             # for all three continuous frames, check IOU with current frame to_birth candidate
             for frame, compare_lst in birth_candidates.items():
                 # for all dets in one previous frame
                 tmp = np.array([])  # tmp variable to record IOU
                 if len(compare_lst):  # not an empty list
-                    old_bbox = [det_boxes[str(frame + 1)][histo_det_idx] for histo_det_idx in compare_lst]
+                    old_bbox = np.array([det_boxes[modifier(frame + 1)][histo_det_idx] for histo_det_idx in compare_lst])
 
                     tmp = bb_fast_IOU_v1(bbox, old_bbox)
 
@@ -755,19 +765,25 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
         cx, cy, w, h = 0.5 * (bbox[0] + bbox[2]), 0.5 * (bbox[1] + bbox[3]), (bbox[2] - bbox[0]), (bbox[3] - bbox[1])
 
         target_pos, target_sz = np.array([cx, cy]), np.array([w, h])
-        state = SiamRPN_init(curr_img, target_pos, target_sz, sot_tracker, count_ids)
+        state = SiamRPN_init(curr_img, target_pos, target_sz, sot_tracker, count_ids, is_cuda=is_cuda)
         # todo check
         states[count_ids] = state
         if bbox_track is not None:
-            bbox_track = torch.cat([bbox_track, torch.FloatTensor(bbox).cuda().unsqueeze(0)], dim=0)
+            bbox = torch.FloatTensor(bbox)
+            if is_cuda:
+                bbox = bbox.cuda()
+            bbox_track = torch.cat([bbox_track, bbox.unsqueeze(0)], dim=0)
         else:
-            bbox_track = torch.FloatTensor(bbox).cuda().unsqueeze(0)
+            bbox_track = torch.FloatTensor(bbox)
+            if is_cuda:
+                bbox_track = bbox_track.cuda().unsqueeze(0)
+            else:
+                bbox_track = bbox_track.unsqueeze(0)
 
         id_track.append(count_ids)
         # give birth for previous frames, toinit_tracks = [[frameid, det_box_id, track_id], ...]
         for element in associated_bbox_detid[idx]:
             toinit_tracks.append([element+[count_ids]])
-
 
         count_ids += 1
 
@@ -789,7 +805,10 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
     else:
         res = []
     if len(res) != 0:
-        bbox_track = torch.index_select(bbox_track, 0, torch.LongTensor(res).cuda())
+        res_t = torch.LongTensor(res)
+        if is_cuda:
+            res_t = res_t.cuda()
+        bbox_track = torch.index_select(bbox_track, 0, res_t)
     else:
         print('all tracks died.')
         bbox_track = None

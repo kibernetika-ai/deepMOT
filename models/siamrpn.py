@@ -67,6 +67,7 @@ class SiamRPN(nn.Module):
         cls1_kernel = cls1_kernel_raw.view(self.anchor*2, self.feature_out, kernel_size, kernel_size)
         return [r1_kernel, cls1_kernel]
 
+
 class SiamRPNBIG(SiamRPN):
     def __init__(self):
         super(SiamRPNBIG, self).__init__(size=2)

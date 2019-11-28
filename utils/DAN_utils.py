@@ -5,7 +5,7 @@ import torch
 
 class TrackUtil:
     @staticmethod
-    def convert_detection(detection):
+    def convert_detection(detection, is_cuda=False):
         '''
         transform the current detection center to [-1, 1]
         :param detection: detection
@@ -19,12 +19,12 @@ class TrackUtil:
         center.unsqueeze_(2)
         center.unsqueeze_(3)
 
-        if TrackerConfig.cuda:
+        if is_cuda:
             return center.cuda()
         return center
 
     @staticmethod
-    def convert_image(image):
+    def convert_image(image, is_cuda=False):
         '''
         transform image to the FloatTensor (1, 3,size, size)
         :param image: same as update parameter
@@ -36,7 +36,7 @@ class TrackUtil:
         image = torch.FloatTensor(image)
         image = image.permute(2, 0, 1)
         image.unsqueeze_(dim=0)
-        if TrackerConfig.cuda:
+        if is_cuda:
             return image.cuda()
         return image
 
