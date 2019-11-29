@@ -179,7 +179,7 @@ def make_single_matrix_torchV2_fast(gt_bboxes, track_bboxes, img_h, img_w):
     return gt_ids, dist_mat.unsqueeze(0)
 
 
-def mix_track_detV2(iou_mat, det, track):
+def mix_track_detV2(iou_mat, det, track, is_cuda=False):
     """
     refine track bounding boxes by detections
     :param iou_mat: iou between dets and tracks, numpy array, [num_track, num_det]
@@ -189,6 +189,9 @@ def mix_track_detV2(iou_mat, det, track):
     """
     values, idx = torch.max(iou_mat, dim=1)
     mask = torch.ones_like(values)
+    if is_cuda:
+        values, idx = values.cuda(), idx.cuda()
+        mask = mask.cuda()
 
     for i in range(iou_mat.shape[0]):
         # iou < 0.6, no refinement
@@ -196,7 +199,10 @@ def mix_track_detV2(iou_mat, det, track):
             mask[i] = 0.0
 
     values = mask*values
+    idx_select = torch.index_select(det, 0, idx)
+    if is_cuda:
+        idx_select = idx_select.cuda()
 
-    return (1.0-values).view(-1, 1)*track + values.view(-1, 1)*torch.index_select(det, 0, idx)
+    return (1.0-values).view(-1, 1)*track + values.view(-1, 1)*idx_select
 
 
