@@ -10,8 +10,8 @@
 # ===========================================================================
 
 import os
-import csv
 import argparse
+import logging
 
 from ml_serving.drivers import driver
 
@@ -30,6 +30,7 @@ from utils.box_utils import getWarpMatrix, bb_fast_IOU_v1, mix_track_detV2
 torch.set_grad_enabled(False)
 cudnn.benchmark = False
 cudnn.deterministic = True
+LOG = logging.getLogger(__name__)
 
 
 def load_object_detection_driver(path):
@@ -115,12 +116,12 @@ def main(args, sot_tracker, sst, is_cuda=False):
 
     # if result exists, skip #
     if os.path.exists(args.save_path + args.save_dir + '/' + vname + '.txt'):
-        print('Result already exists. Skip')
+        LOG.info('Result already exists. Skip')
         return
 
-    print('Load detection model...')
+    LOG.info('Load detection model...')
     detection = load_object_detection_driver(args.detection_path)
-    print('Done.')
+    LOG.info('Done.')
 
     # load MOT configuration #
     (
@@ -130,8 +131,8 @@ def main(args, sot_tracker, sst, is_cuda=False):
         CMC, birth_iou
     ) = tracking_config(vname, 'mot17')
 
-    print("tracking video: ")
-    print(vname)
+    LOG.info("tracking video: ")
+    LOG.info(vname)
 
     csv_towrite = []  # list to create final tracking results
     track_init = []  # near online track init
@@ -190,10 +191,10 @@ def main(args, sot_tracker, sst, is_cuda=False):
     while True:
         ok, img_curr = vc.read()
         if not ok:
-            print("Can't read frame. Exit.")
+            LOG.info("Can't read frame. Exit.")
             break
 
-        print("frameid: ", frame_id+1)
+        LOG.info("frameid: ", frame_id+1)
         h, w, _ = img_curr.shape
 
         # tracking for current frame #
@@ -346,7 +347,7 @@ def main(args, sot_tracker, sst, is_cuda=False):
 
                     boxes = bbox_track[frame_id].detach().cpu().numpy().tolist()
                     for idx, [key, state] in enumerate(states.items()):
-                        # print(idx, key, state['gt_id'])
+                        # LOG.info(idx, key, state['gt_id'])
                         box = boxes[idx]
                         state['target_pos'] = np.array([0.5*(box[2] + box[0]), 0.5*(box[3] + box[1])])
                         state['target_sz'] = np.array([box[2] - box[0], box[3] - box[1]])
@@ -393,7 +394,7 @@ def main(args, sot_tracker, sst, is_cuda=False):
                         csv_towrite.append(towrite)
 
         else:
-            print("no detections! all tracks killed.")
+            LOG.info("no detections! all tracks killed.")
             bbox_track[frame_id] = None
             id_track = list()
             states = dict()
@@ -447,12 +448,12 @@ def main(args, sot_tracker, sst, is_cuda=False):
     #     for row in csv_towrite:
     #         writer.writerow(row)
     #
-    # print("tracking for {:s} is done.".format(vname))
+    # LOG.info("tracking for {:s} is done.".format(vname))
 
 
 if __name__ == '__main__':
     # init parameters #
-    print("Loading parameters...")
+    LOG.info("Loading parameters...")
     curr_path = realpath(dirname(__file__))
     parser = argparse.ArgumentParser(description='PyTorch MOT tracking')
 
@@ -499,8 +500,8 @@ if __name__ == '__main__':
 
     # init sot tracker #
     is_cuda = torch.cuda.is_available()
-    print("loading trained tracker from: ")
-    print(args.models_root + 'trainedSOTtoMOT.pth')
+    LOG.info("loading trained tracker from: ")
+    LOG.info(args.models_root + 'trainedSOTtoMOT.pth')
     sot_tracker = SiamRPNvot()
     sot_tracker.load_state_dict(
         torch.load(
@@ -510,8 +511,8 @@ if __name__ == '__main__':
     )
 
     # init appearance model #
-    print("loading appearance model from: ")
-    print(args.models_root + 'DAN.pth')
+    LOG.info("loading appearance model from: ")
+    LOG.info(args.models_root + 'DAN.pth')
     sst = build_sst('test', 900)
     sst.load_state_dict(
         torch.load(
