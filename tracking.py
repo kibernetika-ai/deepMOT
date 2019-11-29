@@ -341,8 +341,8 @@ def main(args, sot_tracker, sst, is_cuda=False):
                     dist_t = torch.FloatTensor(distance)
                     det_t = torch.FloatTensor(frames_det[frame_id + 1])
                     if is_cuda:
-                        dist_t.cuda()
-                        det_t.cuda()
+                        dist_t = dist_t.cuda()
+                        det_t = det_t.cuda()
                     bbox_track[frame_id] = mix_track_detV2(dist_t, det_t, bbox_track[frame_id], is_cuda=is_cuda)
 
                     boxes = bbox_track[frame_id].detach().cpu().numpy().tolist()
