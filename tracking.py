@@ -343,7 +343,7 @@ def main(args, sot_tracker, sst, is_cuda=False):
                     if is_cuda:
                         dist_t.cuda()
                         det_t.cuda()
-                    bbox_track[frame_id] = mix_track_detV2(dist_t, det_t, bbox_track[frame_id])
+                    bbox_track[frame_id] = mix_track_detV2(dist_t, det_t, bbox_track[frame_id], is_cuda=is_cuda)
 
                     boxes = bbox_track[frame_id].detach().cpu().numpy().tolist()
                     for idx, [key, state] in enumerate(states.items()):
