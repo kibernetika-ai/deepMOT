@@ -296,7 +296,7 @@ def main(args, sot_tracker, sst, is_cuda=False):
                 target_pos, target_sz, state_curr, _ = SiamRPN_track(
                     state_curr, img_curr.copy(), sot_tracker,
                     train=True, CMC=(img_prev is not None and CMC),
-                    prev_xyxy=prev_xyxy, w_matrix=w_matrix
+                    prev_xyxy=prev_xyxy, w_matrix=w_matrix, is_cuda=is_cuda
                 )
                 tmp.append(
                     torch.stack(
