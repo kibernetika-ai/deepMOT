@@ -652,7 +652,8 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                 velocity = (curr_pos - first_pos)/(current_frame-first_frame)
                 if case1_interpolate:
                     for framerate in range(frameid-first_frame-1):
-                        toinit_tracks.append([[framerate+first_frame+1, first_pos+(framerate+1)*velocity, id_track[to_recover]]])
+                        ar = (first_pos+(framerate+1)*velocity).astype(np.float32)
+                        toinit_tracks.append([framerate+first_frame+1, ar, id_track[to_recover]])
                 # track becomes active
                 collect_prev_pos[id_track[to_recover]][5] = 'active'
                 # clean up matched_counter and det boxes
@@ -783,7 +784,9 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
         id_track.append(count_ids)
         # give birth for previous frames, toinit_tracks = [[frameid, det_box_id, track_id], ...]
         for element in associated_bbox_detid[idx]:
-            toinit_tracks.append([element+[count_ids]])
+            if len(det_boxes[frameid + 1]) > element[1]:
+                tmp_box = det_boxes[frameid + 1][element[1]]
+                toinit_tracks.append([element[0], tmp_box]+[count_ids])
 
         count_ids += 1
 

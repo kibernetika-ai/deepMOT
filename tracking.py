@@ -15,6 +15,7 @@ import argparse
 
 from ml_serving.drivers import driver
 
+from utils import utils
 from utils.sot_utils import *
 from models.DAN import build_sst
 import torch.backends.cudnn as cudnn
@@ -63,6 +64,49 @@ def get_boxes(drv: driver.ServingDriver, frame: np.ndarray,
     # boxes = np.concatenate((boxes, confidence), axis=1)
 
     return boxes
+
+
+def draw_output_frame(frame_id, img, color_list, tracks):
+    overlay = img.copy()
+    tracks = np.array(tracks)
+
+    row_ind = np.where(tracks[:, 0] == frame_id)[0]
+    for i in range(0, row_ind.shape[0]):
+        id = int(max(tracks[row_ind[i], 2], 0))
+        color_ind = id % len(color_list)
+
+        # plot the line
+        row_ind_line = np.where((tracks[:, 0] > frame_id - 50) & (tracks[:, 0] < frame_id + 1) & (tracks[:, 2] == id))[0]
+
+        # plot the rectangle
+        for j in range(0, row_ind_line.shape[0], 5):
+
+            box = tracks[row_ind_line[j], 1]
+            line_xc = int((box[0] + box[2]) / 2.)
+            line_yc = int(box[3])
+            bb_w = 5
+            line_x1 = line_xc - bb_w
+            line_y1 = line_yc - bb_w
+            line_x2 = line_xc + bb_w
+            line_y2 = line_yc + bb_w
+            cv2.rectangle(overlay, (line_x1, line_y1), (line_x2, line_y2), color_list[color_ind], -1)
+
+            t_past = tracks[row_ind_line[j], 0]
+            alpha = 1 - (frame_id - t_past) / 80  # Transparency factor.
+            img = cv2.addWeighted(overlay, alpha, img, 1 - alpha, 0)
+            overlay = img.copy()
+
+    for i in range(0, row_ind.shape[0]):
+        id = int(tracks[row_ind[i], 2])
+        bb = tracks[row_ind[i], 1]
+        bb_x1 = int(bb[0])
+        bb_y1 = int(bb[1])
+        bb_x2 = int(bb[2])
+        bb_y2 = int(bb[3])
+        color_ind = id % len(color_list)
+        cv2.rectangle(overlay, (bb_x1, bb_y1), (bb_x2, bb_y2), color_list[color_ind], 3)
+
+    return overlay
 
 
 def main(args, sot_tracker, sst, is_cuda=False):
@@ -127,13 +171,21 @@ def main(args, sot_tracker, sst, is_cuda=False):
 
     to_interpolate = dict()
 
-    pre_warp_matrix = None
     w_matrix = None
     frame_id = 0
     frames_det = {}
 
     vc = cv2.VideoCapture(source)
+    w = vc.get(cv2.CAP_PROP_FRAME_WIDTH)
+    h = vc.get(cv2.CAP_PROP_FRAME_HEIGHT)
+    fps = vc.get(cv2.CAP_PROP_FPS)
+    writer = None
+    if args.output != 'display':
+        writer = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc(*'mp4v'), fps, (int(w), int(h)))
+
     frames = vc.get(cv2.CAP_PROP_FRAME_COUNT)
+    wait_frames_before_process = 5
+    color_list = utils.get_spaced_colors(100)
 
     while True:
         ok, img_curr = vc.read()
@@ -146,7 +198,6 @@ def main(args, sot_tracker, sst, is_cuda=False):
 
         # tracking for current frame #
         det_boxes = get_boxes(detection, img_curr, only_class=1)
-        # det_boxes = det_boxes.tolist()
         frames_det[frame_id + 1] = det_boxes
 
         # having active tracks
@@ -172,7 +223,6 @@ def main(args, sot_tracker, sst, is_cuda=False):
                 ]
 
                 if state_curr['gt_id'] not in collect_prev_pos.keys():
-
                     # extract image features by DAN
                     prev_xywh = [prev_pos[0] - 0.5 * prev_size[0], prev_pos[1] - 0.5 * prev_size[1],
                                  prev_size[0], prev_size[1]]
@@ -314,7 +364,6 @@ def main(args, sot_tracker, sst, is_cuda=False):
 
             # birth and death process, no need to be differentiable #
 
-            # __import__('pdb').set_trace()
             bbox_track[frame_id], count_ids = tracking_birth_death(
                 distance,
                 bbox_track[frame_id], frames_det, img_curr,
@@ -357,32 +406,48 @@ def main(args, sot_tracker, sst, is_cuda=False):
         if is_cuda:
             torch.cuda.empty_cache()
 
-    # save interpolations into a txt files for evaluation #
-    for lst in track_init:
-        for frame_id, det_id, track_id in lst:
-            if not isinstance(det_id, np.ndarray):
-                tmp_box = copy.deepcopy(frames_det[frame_id+1][det_id])
+        if frame_id >= wait_frames_before_process:
+            out_frame = draw_output_frame(frame_id - wait_frames_before_process, img_curr, color_list, track_init)
+            if args.output == 'display':
+                cv2.namedWindow('process')
+                cv2.imshow('process', out_frame)
+                key = cv2.waitKey(1)
+                if key in [ord('q'), 27, ord('й')]:
+                    break
             else:
-                tmp_box = det_id.tolist()
-            # x1,y1,x2,y2 to x1,y1,w,h
-            tmp_box[2] = tmp_box[2] - tmp_box[0]
-            tmp_box[3] = tmp_box[3] - tmp_box[1]
-            towrite = [str(frame_id + 1)]
-            towrite += [str(elem) for elem in ([track_id+1] + tmp_box)]
-            towrite += ['-1', '-1', '-1', '-1']
-            csv_towrite.append(towrite)
+                writer.write(out_frame)
 
-    # write txt file for evaluation #
-    if not os.path.exists(args.save_path + args.save_dir +'/'):
-        os.makedirs(args.save_path + args.save_dir + '/')
+    vc.release()
+    cv2.destroyAllWindows()
+    if writer is not None:
+        writer.release()
 
-    with open(args.save_path + args.save_dir + '/'
-              + vname+'.txt', 'w', encoding='utf-8') as f:
-        writer = csv.writer(f, delimiter=',')
-        for row in csv_towrite:
-            writer.writerow(row)
-
-    print("tracking for {:s} is done.".format(vname))
+    # save interpolations into a txt files for evaluation #
+    # for lst in track_init:
+    #     for frame_id, det_id, track_id in lst:
+    #         if not isinstance(det_id, np.ndarray):
+    #             tmp_box = copy.deepcopy(frames_det[frame_id+1][det_id])
+    #         else:
+    #             tmp_box = det_id.tolist()
+    #         # x1,y1,x2,y2 to x1,y1,w,h
+    #         tmp_box[2] = tmp_box[2] - tmp_box[0]
+    #         tmp_box[3] = tmp_box[3] - tmp_box[1]
+    #         towrite = [str(frame_id + 1)]
+    #         towrite += [str(elem) for elem in ([track_id+1] + tmp_box)]
+    #         towrite += ['-1', '-1', '-1', '-1']
+    #         csv_towrite.append(towrite)
+    #
+    # # write txt file for evaluation #
+    # if not os.path.exists(args.save_path + args.save_dir +'/'):
+    #     os.makedirs(args.save_path + args.save_dir + '/')
+    #
+    # with open(args.save_path + args.save_dir + '/'
+    #           + vname+'.txt', 'w', encoding='utf-8') as f:
+    #     writer = csv.writer(f, delimiter=',')
+    #     for row in csv_towrite:
+    #         writer.writerow(row)
+    #
+    # print("tracking for {:s} is done.".format(vname))
 
 
 if __name__ == '__main__':
@@ -417,6 +482,12 @@ if __name__ == '__main__':
 
     parser.add_argument(
         '--source',
+        required=True,
+        help='path to video source',
+    )
+
+    parser.add_argument(
+        '--output',
         required=True,
         help='path to video source',
     )
