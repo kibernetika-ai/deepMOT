@@ -182,7 +182,7 @@ def main(args, sot_tracker, sst, is_cuda=False):
     fps = vc.get(cv2.CAP_PROP_FPS)
     writer = None
     if args.output != 'display':
-        writer = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc(*'mp4v'), fps, (int(w), int(h)))
+        writer = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc(*'MP4V'), fps, (int(w), int(h)))
 
     frames = vc.get(cv2.CAP_PROP_FRAME_COUNT)
     wait_frames_before_process = 5
