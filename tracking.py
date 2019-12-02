@@ -194,7 +194,7 @@ def main(args, sot_tracker, sst, is_cuda=False):
             LOG.info("Can't read frame. Exit.")
             break
 
-        LOG.info("frameid: ", frame_id+1)
+        LOG.info(f"frameid: {frame_id+1}")
         h, w, _ = img_curr.shape
 
         # tracking for current frame #
@@ -506,7 +506,7 @@ if __name__ == '__main__':
     # init sot tracker #
     is_cuda = torch.cuda.is_available()
     LOG.info("loading trained tracker from: ")
-    LOG.info(args.models_root + 'trainedSOTtoMOT.pth')
+    LOG.info(os.path.join(args.models_root, 'trainedSOTtoMOT.pth'))
     sot_tracker = SiamRPNvot()
     sot_tracker.load_state_dict(
         torch.load(
@@ -517,7 +517,7 @@ if __name__ == '__main__':
 
     # init appearance model #
     LOG.info("loading appearance model from: ")
-    LOG.info(args.models_root + 'DAN.pth')
+    LOG.info(os.path.join(args.models_root, 'DAN.pth'))
     sst = build_sst('test', 900)
     sst.load_state_dict(
         torch.load(
