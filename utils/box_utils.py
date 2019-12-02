@@ -203,10 +203,6 @@ def mix_track_detV2(iou_mat, det, track, is_cuda=False):
     if is_cuda:
         idx_select = idx_select.cuda()
 
-    print(type(values))
-    print(type(track))
-    print(type(idx_select))
-    print((1.0-values).view(-1, 1))
     return (1.0-values).view(-1, 1)*track + values.view(-1, 1)*idx_select
 
 
