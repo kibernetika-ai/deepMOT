@@ -13,6 +13,7 @@ from utils.sot_utils import *
 from utils.DAN_utils import TrackUtil
 from utils.box_utils import bb_fast_IOU_v1
 
+
 # MOT functions #
 
 
@@ -100,6 +101,7 @@ def nms_fast_apperance_as_score(boxes, scores, overlapThresh):
     # integer data type
     return boxes[pick], pick
 
+
 # birth and death during training, with gts. #
 
 
@@ -146,8 +148,9 @@ def easy_birth_deathV4_rpn(munkres, bbox_track, det_boxes, curr_img, id_track, c
             bbox_to_crop = scale_box(bbox_to_crop, h, w)
 
         # init new object
-        cx, cy, target_w, target_h = 0.5 * (bbox_to_crop[0] + bbox_to_crop[2]), 0.5 * (bbox_to_crop[1] + bbox_to_crop[3]), \
-                       (bbox_to_crop[2] - bbox_to_crop[0]), (bbox_to_crop[3] - bbox_to_crop[1])
+        cx, cy, target_w, target_h = 0.5 * (bbox_to_crop[0] + bbox_to_crop[2]), 0.5 * (
+                    bbox_to_crop[1] + bbox_to_crop[3]), \
+                                     (bbox_to_crop[2] - bbox_to_crop[0]), (bbox_to_crop[3] - bbox_to_crop[1])
 
         target_pos, target_sz = np.array([cx, cy]), np.array([target_w, target_h])
 
@@ -191,14 +194,15 @@ def easy_birth_deathV4_rpn(munkres, bbox_track, det_boxes, curr_img, id_track, c
 
     return bbox_track, count_ids, no_tracks_flag
 
+
 # birth and death during tracking, with dets. #
 
 
-def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
+def tracking_birth_death(distance, bbox_track, det_boxes, curr_img, id_track,
                          count_ids, frameid, birth_candidates, toinit_tracks, death_candidates,
                          states, sot_tracker, collect_prev_pos, sst, th,
-                         birth_iou=0.4, death_count=30, iou_th_overlap = 0.4, to_refine=False, DAN_th=0.5,birth_wait=3,
-                         to_interpolate=None, interpolate_flag=-1.0, loose_assignment=False,
+                         birth_iou=0.4, death_count=30, iou_th_overlap=0.4, to_refine=False, DAN_th=0.5,
+                         birth_wait=3, to_interpolate=None, interpolate_flag=-1.0, loose_assignment=False,
                          case1_interpolate=True, is_cuda=False, last_frame=None):
     """
     :param distance: IOU between [track, det]  [num_track, num_dets]
@@ -229,7 +233,7 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
         max_frameid = np.max(np.array(list(det_boxes.keys()), dtype=np.float32))
     im_h, im_w, _ = curr_img.shape
 
-    im_curr_features = TrackUtil.convert_image(curr_img.copy(), is_cuda)
+    im_curr_features = TrackUtil.convert_image(curr_img.copy(), is_cuda=is_cuda)
 
     # track ids to die
     to_die = []
@@ -268,14 +272,14 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                     pass
 
                 if not loose_assignment:
-                    rest_IOUs = [distance[track_index, detection_id] for track_index in track_indexes]
+                    rest_ious = [distance[track_index, detection_id] for track_index in track_indexes]
                     # print(rest_IOUs)
-                    max_iou_idx = track_indexes[np.argmax(rest_IOUs)]
+                    max_iou_idx = track_indexes[np.argmax(rest_ious)]
                     if max_iou_idx not in track_dets.keys():
-                        track_dets[max_iou_idx] = [[detection_id, np.max(rest_IOUs)]]
+                        track_dets[max_iou_idx] = [[detection_id, np.max(rest_ious)]]
 
                     else:
-                        track_dets[max_iou_idx].append([detection_id, np.max(rest_IOUs)])
+                        track_dets[max_iou_idx].append([detection_id, np.max(rest_ious)])
                 else:
                     for max_iou_idx in track_indexes:
                         if max_iou_idx not in track_dets.keys():
@@ -318,7 +322,7 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                 # out of view compensation
                 # (1) check velocity
                 if collect_prev_pos[id_track[i]][6][-1] != -1 and (id_track[i] not in death_candidates
-                                                                   or death_candidates[id_track[i]] < interpolate_flag)\
+                                                                   or death_candidates[id_track[i]] < interpolate_flag) \
                         and id_track[i] not in to_interpolate:
 
                     center_velo, avg_h, avg_w = collect_prev_pos[id_track[i]][6]
@@ -326,7 +330,7 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                     # xyxy
                     to_check_box = bbox_track[i, :].cpu().numpy().copy()
                     # left, top, right, bottom out of view
-                    condition_left = (to_check_box[0] < 0) and (to_check_box[2]> 0)
+                    condition_left = (to_check_box[0] < 0) and (to_check_box[2] > 0)
                     condition_top = (to_check_box[1] < 0) and (to_check_box[3] > 0)
                     condition_right = (to_check_box[2] > im_w) and (to_check_box[0] < im_w)
                     condition_bottom = (to_check_box[1] < im_h) and (to_check_box[3] > im_h)
@@ -340,26 +344,27 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                             max_comp = interpolate_flag + death_candidates[id_track[i]]
                             begin_frameid = frameid - death_candidates[id_track[i]]
                         com_counter = 0
-                        complete_OofV = complete_out_of_view(to_check_box, im_w, im_h)
+                        complete_oof_v = complete_out_of_view(to_check_box, im_w, im_h)
 
-                        # toinit_tracks = [[frameid, det_box_id, track_id], ...]
+                        # to_init_tracks = [[frame_id, det_box_id, track_id], ...]
                         # interpolate
                         # for lst_to_copy in collect_prev_pos[id_track[to_recover]][4]:
-                        #     toinit_tracks.append([copy.deepcopy(lst_to_copy) + [id_track[to_recover]]])
+                        #     to_init_tracks.append([copy.deepcopy(lst_to_copy) + [id_track[to_recover]]])
 
                         pre_pos = collect_prev_pos[id_track[i]][0][-1][-1].copy()
                         to_comp = list()
-                        while com_counter<max_comp and not complete_OofV and begin_frameid+com_counter < max_frameid:
+                        while com_counter < max_comp and not complete_oof_v and begin_frameid + com_counter < max_frameid:
                             # print("prev pos", pre_pos)
                             # print(toinit_tracks)
-                            cx, cy = 0.5 * (pre_pos[0] + pre_pos[2])+com_counter*center_velo[0], \
-                                     0.5 * (pre_pos[1] + pre_pos[3])+com_counter*center_velo[1]
-                            comp_box = np.array([cx-avg_w*0.5, cy-avg_h*0.5, cx+avg_w*0.5, cy+avg_h*0.5])
-                            complete_OofV = complete_out_of_view(comp_box, im_w, im_h)
-                            to_comp.append([[begin_frameid+com_counter, comp_box, id_track[i]]])
+                            cx, cy = 0.5 * (pre_pos[0] + pre_pos[2]) + com_counter * center_velo[0], \
+                                     0.5 * (pre_pos[1] + pre_pos[3]) + com_counter * center_velo[1]
+                            comp_box = np.array(
+                                [cx - avg_w * 0.5, cy - avg_h * 0.5, cx + avg_w * 0.5, cy + avg_h * 0.5])
+                            complete_oof_v = complete_out_of_view(comp_box, im_w, im_h)
+                            to_comp.append([[begin_frameid + com_counter, comp_box, id_track[i]]])
                             com_counter += 1
 
-                        if com_counter <= max_comp and (begin_frameid+com_counter) < max_frameid:
+                        if com_counter <= max_comp and (begin_frameid + com_counter) < max_frameid:
                             to_interpolate[id_track[i]] = copy.deepcopy(to_comp)
 
             # normal process
@@ -386,7 +391,7 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                     center_velo, avg_h, avg_w = collect_prev_pos[id_track[i]][6]
                     # if just entered inactive mode
                     if collect_prev_pos[id_track[i]][7][-1] == -1:
-                        #RECORD FIRST LOST POS
+                        # RECORD FIRST LOST POS
                         pre_pos = collect_prev_pos[id_track[i]][0][-1][-1].copy()
                         # print("pre pos", pre_pos)
                     else:
@@ -394,12 +399,14 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                     cx, cy = 0.5 * (pre_pos[0] + pre_pos[2]), 0.5 * (pre_pos[1] + pre_pos[3])
                     # todo check ordering of states == ordering of box
                     # force inactive object to move in a constant velocity as before, with a fixed bbox
-                    states[id_track[i]]['target_pos'] = np.array([cx, cy])+center_velo
+                    states[id_track[i]]['target_pos'] = np.array([cx, cy]) + center_velo
                     states[id_track[i]]['target_sz'] = np.array([avg_w, avg_h])
                     # update position in inactive mode
                     # print(center_velo)
-                    inactive_pos = [(cx+center_velo[0])-avg_w*0.5, (cy+center_velo[1])-avg_h*0.5,\
-                                    (cx+center_velo[0])+avg_w*0.5, (cy+center_velo[1])+avg_h*0.5]
+                    inactive_pos = [
+                        (cx + center_velo[0]) - avg_w * 0.5, (cy + center_velo[1]) - avg_h * 0.5,
+                        (cx + center_velo[0]) + avg_w * 0.5, (cy + center_velo[1]) + avg_h * 0.5
+                    ]
                     collect_prev_pos[id_track[i]][7] = np.array(inactive_pos).copy()
 
                 # collect track trajectory during inactive mode
@@ -410,22 +417,25 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                     # current closest detection
                     if DAN_th > 0.0:
                         detection = np.array([det[associated_det_id][-4:]], dtype=np.float32)
-                        #todo check shape
+                        # todo check shape
 
                         detection[:, 2] = detection[:, 2] - detection[:, 0]
                         detection[:, 3] = detection[:, 3] - detection[:, 1]
                         detection[:, [0, 2]] /= float(im_w)
                         detection[:, [1, 3]] /= float(im_h)
-                        detection_center = TrackUtil.convert_detection(detection)
+                        detection_center = TrackUtil.convert_detection(detection, is_cuda=is_cuda)
                         det_features = sst.forward_feature_extracter(im_curr_features, detection_center).detach_()
                         # detection in column, track in row
                         affinity_mat_after_softmax = 0
                         penalty = 0
                         for old_frame, i_features in collect_prev_pos[id_track[i]][1]:
-                            penalty += 0.995**((frameid-old_frame)/3.0)
+                            penalty += 0.995 ** ((frameid - old_frame) / 3.0)
 
-                            affinity_mat_after_softmax += ((0.995**((frameid-old_frame)/3.0))*sst.forward_stacker_features\
-                                (i_features, det_features, False, toNumpy=True)[:, :-1])
+                            affinity_mat_after_softmax += (
+                                    (0.995 ** ((frameid - old_frame) / 3.0)) * sst.forward_stacker_features
+                                                                               (i_features, det_features, False,
+                                                                                to_numpy=True)[:, :-1]
+                            )
                         affinity_mat_after_softmax /= penalty
                     else:
                         affinity_mat_after_softmax = 1.0
@@ -444,9 +454,10 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                             avg_box = None
                             for f_id, det_index in collected_dets:
                                 if avg_box is None:
-                                    avg_box = np.array(det_boxes[modifier(f_id+1)][det_index][-4:]).astype(np.float32)
+                                    avg_box = np.array(det_boxes[modifier(f_id + 1)][det_index][-4:]).astype(np.float32)
                                 else:
-                                    avg_box += np.array(det_boxes[modifier(f_id+1)][det_index][-4:]).astype(np.float32)
+                                    avg_box += np.array(det_boxes[modifier(f_id + 1)][det_index][-4:]).astype(
+                                        np.float32)
 
                                 # remove this detection from birth candidates
                                 if f_id in birth_candidates.keys() and det_index in birth_candidates[f_id]:
@@ -459,12 +470,13 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                             avg_box /= 3.0
                             # todo check avg_box shape
                             # print(avg_box.shape)
-                            cx, cy, w, h = 0.5 * (avg_box[0] + avg_box[2]), 0.5 * (avg_box[1] + avg_box[3]), \
-                                           (avg_box[2] - avg_box[0]), (avg_box[3] - avg_box[1])
+                            cx, cy = 0.5 * (avg_box[0] + avg_box[2]), 0.5 * (avg_box[1] + avg_box[3])
+                            w, h = (avg_box[2] - avg_box[0]), (avg_box[3] - avg_box[1])
 
                             # todo check ordering of states == ordering of box
                             states[id_track[i]] = SiamRPN_init(curr_img, np.array([cx, cy]),
-                                                     np.array([w, h]), sot_tracker, states[id_track[i]]['gt_id'])
+                                                               np.array([w, h]), sot_tracker,
+                                                               states[id_track[i]]['gt_id'])
 
                             # correct the collected track trajectory during inactive mode
                             collect_prev_pos[id_track[i]][4][-1] = [frameid, avg_box]
@@ -500,7 +512,7 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                 detection[:, 3] = detection[:, 3] - detection[:, 1]
                 detection[:, [0, 2]] /= float(im_w)
                 detection[:, [1, 3]] /= float(im_h)
-                detection_center = TrackUtil.convert_detection(detection)
+                detection_center = TrackUtil.convert_detection(detection, is_cuda=is_cuda)
                 det_features = sst.forward_feature_extracter(im_curr_features, detection_center).detach_()
                 # detection in column, track in row
                 affinity_mat_after_softmax = 0
@@ -509,8 +521,8 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                     penalty += 0.995 ** ((frameid - old_frame) / 3.0)
                     affinity_mat_after_softmax += ((0.995 ** ((frameid - old_frame) / 3.0)) *
                                                    sst.forward_stacker_features(i_features, det_features, False,
-                                                                                toNumpy=True, is_cuda=is_cuda)[:,:-1])
-                affinity_mat_after_softmax/= penalty
+                                                                                to_numpy=True, is_cuda=is_cuda)[:, :-1])
+                affinity_mat_after_softmax /= penalty
             else:
                 affinity_mat_after_softmax = 1.0
 
@@ -572,7 +584,7 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
         # print('before', candidates_index)
 
         if len(candidates_index) > 0:
-            self_apperance_scores = [-1.0*id_track[corres_index] for corres_index in candidates_index]
+            self_apperance_scores = [-1.0 * id_track[corres_index] for corres_index in candidates_index]
             _, pick = nms_fast_apperance_as_score(now_track[candidates_index, :], self_apperance_scores, 0.5)
             to_deactivate_index = list(set(pick) ^ set(list(range(len(candidates_index)))))
 
@@ -615,7 +627,8 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                                         (cx + center_velo[0]) + avg_w * 0.5, (cy + center_velo[1]) + avg_h * 0.5]
                         collect_prev_pos[id_track[inactive_idx]][7] = np.array(inactive_pos).copy()
 
-                    collect_prev_pos[id_track[inactive_idx]][4].append([frameid, bbox_track[inactive_idx, :].detach().cpu().numpy().copy()])
+                    collect_prev_pos[id_track[inactive_idx]][4].append(
+                        [frameid, bbox_track[inactive_idx, :].detach().cpu().numpy().copy()])
 
                     # clean up matched_counter and det boxes
                     collect_prev_pos[id_track[inactive_idx]][2] = 0
@@ -623,7 +636,7 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                     # iou_ok_DAN_not_ok.append(np.argmax(distance[inactive_idx, :]))# todo ???
 
             for to_recover in to_recover_track_idxes:
-                first_frame = collect_prev_pos[id_track[to_recover]][4][0][0]-1
+                first_frame = collect_prev_pos[id_track[to_recover]][4][0][0] - 1
                 current_frame = frameid + 0
                 first_pos = collect_prev_pos[id_track[to_recover]][0][-1][-1].copy()
                 if to_refine:
@@ -633,13 +646,15 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                     associated_det_id, _ = ious_for_to_recover[where_max_iou]
                     curr_pos = np.array(det[associated_det_id])
 
-                    cx, cy, w, h = 0.5 * (curr_pos[0] + curr_pos[2]), 0.5 * (curr_pos[1] + curr_pos[3]), \
-                                   (curr_pos[2] - curr_pos[0]), (curr_pos[3] - curr_pos[1])
+                    cx, cy = 0.5 * (curr_pos[0] + curr_pos[2]), 0.5 * (curr_pos[1] + curr_pos[3])
+                    w, h = (curr_pos[2] - curr_pos[0]), (curr_pos[3] - curr_pos[1])
 
                     # todo check ordering of states == ordering of box
-                    states[id_track[to_recover]] = SiamRPN_init(curr_img, np.array([cx, cy]),
-                                                       np.array([w, h]), sot_tracker,
-                                                                states[id_track[to_recover]]['gt_id'])
+                    states[id_track[to_recover]] = SiamRPN_init(
+                        curr_img, np.array([cx, cy]),
+                        np.array([w, h]), sot_tracker,
+                        states[id_track[to_recover]]['gt_id']
+                    )
 
                     # update bbox_track
                     bbox_track[to_recover][0] = float(curr_pos[0])
@@ -649,11 +664,11 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                 else:
                     curr_pos = bbox_track[to_recover, :].detach().cpu().numpy()
 
-                velocity = (curr_pos - first_pos)/(current_frame-first_frame)
+                velocity = (curr_pos - first_pos) / (current_frame - first_frame)
                 if case1_interpolate:
-                    for framerate in range(frameid-first_frame-1):
-                        ar = (first_pos+(framerate+1)*velocity).astype(np.float32)
-                        toinit_tracks.append([framerate+first_frame+1, ar, id_track[to_recover]])
+                    for framerate in range(frameid - first_frame - 1):
+                        ar = (first_pos + (framerate + 1) * velocity).astype(np.float32)
+                        toinit_tracks.append([framerate + first_frame + 1, ar, id_track[to_recover]])
                 # track becomes active
                 collect_prev_pos[id_track[to_recover]][5] = 'active'
                 # clean up matched_counter and det boxes
@@ -721,7 +736,8 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
                 # for all dets in one previous frame
                 tmp = np.array([])  # tmp variable to record IOU
                 if len(compare_lst):  # not an empty list
-                    old_bbox = np.array([det_boxes[modifier(frame + 1)][histo_det_idx] for histo_det_idx in compare_lst])
+                    old_bbox = np.array(
+                        [det_boxes[modifier(frame + 1)][histo_det_idx] for histo_det_idx in compare_lst])
 
                     tmp = bb_fast_IOU_v1(bbox, old_bbox)
 
@@ -763,7 +779,8 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
     for idx in new_tobirth:
         bbox = det[idx][-4:]
         # init new object
-        cx, cy, w, h = 0.5 * (bbox[0] + bbox[2]), 0.5 * (bbox[1] + bbox[3]), (bbox[2] - bbox[0]), (bbox[3] - bbox[1])
+        cx, cy = 0.5 * (bbox[0] + bbox[2]), 0.5 * (bbox[1] + bbox[3])
+        w, h = (bbox[2] - bbox[0]), (bbox[3] - bbox[1])
 
         target_pos, target_sz = np.array([cx, cy]), np.array([w, h])
         state = SiamRPN_init(curr_img, target_pos, target_sz, sot_tracker, count_ids, is_cuda=is_cuda)
@@ -786,7 +803,7 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
         for element in associated_bbox_detid[idx]:
             if len(det_boxes[frameid + 1]) > element[1]:
                 tmp_box = det_boxes[frameid + 1][element[1]]
-                toinit_tracks.append([element[0], tmp_box]+[count_ids])
+                toinit_tracks.append([element[0], tmp_box] + [count_ids])
 
         count_ids += 1
 
@@ -817,4 +834,3 @@ def tracking_birth_death(distance,  bbox_track, det_boxes, curr_img, id_track,
         bbox_track = None
     # print(birth_candidates.keys())
     return bbox_track, count_ids
-

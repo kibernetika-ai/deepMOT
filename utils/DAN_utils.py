@@ -3,14 +3,16 @@ import cv2
 import numpy as np
 import torch
 
+
 class TrackUtil:
     @staticmethod
     def convert_detection(detection, is_cuda=False):
-        '''
+        """
         transform the current detection center to [-1, 1]
+        :param is_cuda:
         :param detection: detection
         :return: translated detection
-        '''
+        """
         # get the center, and format it in (-1, 1)
         center = (2 * detection[:, 0:2] + detection[:, 2:4]) - 1.0
         # center = torch.from_numpy(center.astype(float)).float()
@@ -25,11 +27,12 @@ class TrackUtil:
 
     @staticmethod
     def convert_image(image, is_cuda=False):
-        '''
+        """
         transform image to the FloatTensor (1, 3,size, size)
+        :param is_cuda:
         :param image: same as update parameter
         :return: the transformed image FloatTensor (i.e. 1x3x900x900)
-        '''
+        """
         image = cv2.resize(image, TrackerConfig.image_size).astype(np.float32)
         # print(image.shape)
         image -= TrackerConfig.mean_pixel
