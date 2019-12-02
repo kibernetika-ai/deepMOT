@@ -474,9 +474,12 @@ def tracking_birth_death(distance, bbox_track, det_boxes, curr_img, id_track,
                             w, h = (avg_box[2] - avg_box[0]), (avg_box[3] - avg_box[1])
 
                             # todo check ordering of states == ordering of box
-                            states[id_track[i]] = SiamRPN_init(curr_img, np.array([cx, cy]),
-                                                               np.array([w, h]), sot_tracker,
-                                                               states[id_track[i]]['gt_id'])
+                            states[id_track[i]] = SiamRPN_init(
+                                curr_img, np.array([cx, cy]),
+                                np.array([w, h]), sot_tracker,
+                                states[id_track[i]]['gt_id'],
+                                is_cuda=is_cuda
+                            )
 
                             # correct the collected track trajectory during inactive mode
                             collect_prev_pos[id_track[i]][4][-1] = [frameid, avg_box]
@@ -653,7 +656,8 @@ def tracking_birth_death(distance, bbox_track, det_boxes, curr_img, id_track,
                     states[id_track[to_recover]] = SiamRPN_init(
                         curr_img, np.array([cx, cy]),
                         np.array([w, h]), sot_tracker,
-                        states[id_track[to_recover]]['gt_id']
+                        states[id_track[to_recover]]['gt_id'],
+                        is_cuda=is_cuda
                     )
 
                     # update bbox_track
