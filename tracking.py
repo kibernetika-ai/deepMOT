@@ -453,6 +453,11 @@ def main(args, sot_tracker, sst, is_cuda=False):
 
 if __name__ == '__main__':
     # init parameters #
+    logging.basicConfig(
+        format='%(asctime)s %(levelname)-5s %(name)-10s [-] %(message)s',
+        level='INFO'
+    )
+    LOG.setLevel(logging.INFO)
     LOG.info("Loading parameters...")
     curr_path = realpath(dirname(__file__))
     parser = argparse.ArgumentParser(description='PyTorch MOT tracking')
