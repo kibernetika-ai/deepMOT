@@ -174,6 +174,7 @@ def main(args, sot_tracker, sst, is_cuda=False):
 
     w_matrix = None
     frame_id = 0
+    frame_num = 0
     frames_det = {}
 
     vc = cv2.VideoCapture(source)
@@ -182,14 +183,20 @@ def main(args, sot_tracker, sst, is_cuda=False):
     fps = vc.get(cv2.CAP_PROP_FPS)
     writer = None
     if args.output != 'display':
-        writer = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc(*'MP4V'), fps, (int(w), int(h)))
+        output_fps = fps / args.every_frame
+        writer = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc(*'MP4V'), output_fps, (int(w), int(h)))
 
     frames = vc.get(cv2.CAP_PROP_FRAME_COUNT)
     wait_frames_before_process = 5
     color_list = utils.get_spaced_colors(100)
 
     while True:
-        ok, img_curr = vc.read()
+        frame_num += 1
+        if frame_num % args.every_frame == 0:
+            ok, img_curr = vc.read()
+        else:
+            vc.grab()
+            continue
         if not ok:
             LOG.info("Can't read frame. Exit.")
             break
@@ -496,6 +503,12 @@ if __name__ == '__main__':
         '--output',
         required=True,
         help='path to video source',
+    )
+    parser.add_argument(
+        '--every-frame',
+        type=int,
+        default=1,
+        help='detect every N frame',
     )
 
     # tracking configs
